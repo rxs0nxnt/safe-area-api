@@ -1,0 +1,21 @@
+meta {
+  name: safe-area code 404
+  type: http
+  seq: 3
+}
+
+get {
+  url: '''
+    http://localhost:4010/safe-area?district=บางซุด
+    
+'''
+  body: none
+  auth: none
+}
+
+params:query {
+  district: '''
+    บางซุด
+    
+  '''
+}

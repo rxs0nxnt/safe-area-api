@@ -1,0 +1,215 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Safe Area API",
+    "version": "1.0.0",
+    "description": "API สำหรับค้นหาข้อมูลพื้นที่ปลอดภัย / พื้นที่เสี่ยง ตามเขตใน กทม. พร้อมแสดงผล Heatmap"
+  },
+  "paths": {
+    "/safe-area": {
+      "get": {
+        "summary": "ค้นหาข้อมูลจุดเสี่ยงของพื้นที่ตามเขต",
+        "description": "รับชื่อเขต (จากพิกัดอัตโนมัติ หรือ Manual) → เรียกข้อมูลจุดเสี่ยงจาก data ที่รวบรวมไว้ → ถ้าไม่พบข้อมูลจะแจ้งว่าเป็นพื้นที่ปลอดภัย ถ้าพบจะคำนวณระดับความเสี่ยง (แดง/ส้ม/เหลือง) แล้วส่ง Heatmap กลับ",
+        "parameters": [
+          {
+            "name": "district",
+            "in": "query",
+            "required": true,
+            "description": "ชื่อเขตที่ต้องการค้นหา (เลือกอัตโนมัติจากพิกัด หรือผู้ใช้เลือกแบบ Manual)",
+            "schema": { "type": "string" },
+            "example": "บางรัก"
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "required": false,
+            "description": "ละติจูด — กรณีผู้ใช้อนุญาตเข้าถึงตำแหน่ง ระบบจะส่งพิกัดมาเพื่อเลือกเขตให้อัตโนมัติ",
+            "schema": { "type": "number", "format": "double" },
+            "example": 13.7279
+          },
+          {
+            "name": "lng",
+            "in": "query",
+            "required": false,
+            "description": "ลองจิจูด — กรณีผู้ใช้อนุญาตเข้าถึงตำแหน่ง ระบบจะส่งพิกัดมาเพื่อเลือกเขตให้อัตโนมัติ",
+            "schema": { "type": "number", "format": "double" },
+            "example": 100.5214
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "พบข้อมูลจุดเสี่ยงในเขตนั้น — คำนวณระดับความเสี่ยง (แดง/ส้ม/เหลือง) แล้วส่งข้อมูล Heatmap กลับ หรือ ไม่พบจุดเสี่ยง — แจ้งว่าเป็นพื้นที่ปลอดภัย",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SafeAreaResponse" },
+                "examples": {
+                  "risk": {
+                    "summary": "พบจุดเสี่ยง — แสดง Heatmap",
+                    "value": {
+                      "district": "บางรัก",
+                      "is_safe": false,
+                      "risk_level": "orange",
+                      "risk_label": "ส้ม",
+                      "risk_score": 65,
+                      "heatmap": [
+                        { "lat": 13.7280, "lng": 100.5220, "intensity": 0.8 },
+                        { "lat": 13.7265, "lng": 100.5195, "intensity": 0.6 },
+                        { "lat": 13.7290, "lng": 100.5240, "intensity": 0.4 }
+                      ],
+                      "message": "พื้นที่เขตบางรักมีความเสี่ยงระดับ ส้ม"
+                    }
+                  },
+                  "safe": {
+                    "summary": "ไม่พบจุดเสี่ยง — พื้นที่ปลอดภัย",
+                    "value": {
+                      "district": "ทวีวัฒนา",
+                      "is_safe": true,
+                      "risk_level": null,
+                      "risk_label": null,
+                      "risk_score": 0,
+                      "heatmap": [],
+                      "message": "พื้นที่เขตทวีวัฒนา เป็นพื้นที่ปลอดภัย"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "ไม่พบข้อมูลเขตที่ค้นหาในระบบ",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorMessage" },
+                "example": {
+                  "message": "ไม่พบเขตที่ระบุในระบบ กรุณาตรวจสอบชื่อเขตอีกครั้ง"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "ส่ง parameter ไม่ครบ (ต้องระบุ district หรือ lat/lng)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ValidationError" },
+                "example": {
+                  "message": "กรุณาระบุชื่อเขต หรือพิกัดตำแหน่ง"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "เรียกข้อมูลจุดเสี่ยงจาก data ที่รวบรวมไว้ไม่สำเร็จ",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+                "example": {
+                  "message": "ไม่สามารถเชื่อมต่อฐานข้อมูลจุดเสี่ยงได้ กรุณาลองใหม่"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HeatmapPoint": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number",
+            "format": "double",
+            "example": 13.7280
+          },
+          "lng": {
+            "type": "number",
+            "format": "double",
+            "example": 100.5220
+          },
+          "intensity": {
+            "type": "number",
+            "format": "double",
+            "minimum": 0,
+            "maximum": 1,
+            "example": 0.8
+          }
+        },
+        "required": ["lat", "lng", "intensity"]
+      },
+      "SafeAreaResponse": {
+        "type": "object",
+        "properties": {
+          "district": {
+            "type": "string",
+            "description": "ชื่อเขตที่ค้นหา",
+            "example": "บางรัก"
+          },
+          "is_safe": {
+            "type": "boolean",
+            "description": "true = พื้นที่ปลอดภัย, false = มีความเสี่ยง",
+            "example": false
+          },
+          "risk_level": {
+            "type": "string",
+            "nullable": true,
+            "enum": ["red", "orange", "yellow"],
+            "description": "ระดับความเสี่ยง: red (แดง), orange (ส้ม), yellow (เหลือง), null (ปลอดภัย)",
+            "example": "orange"
+          },
+          "risk_label": {
+            "type": "string",
+            "nullable": true,
+            "enum": ["แดง", "ส้ม", "เหลือง"],
+            "example": "ส้ม"
+          },
+          "risk_score": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100,
+            "example": 65
+          },
+          "heatmap": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/HeatmapPoint" }
+          },
+          "message": {
+            "type": "string",
+            "example": "พื้นที่เขตบางรักมีความเสี่ยงระดับ ส้ม"
+          }
+        },
+        "required": ["district", "is_safe", "risk_score", "heatmap", "message"]
+      },
+      "ErrorMessage": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "ไม่พบเขตที่ระบุในระบบ กรุณาตรวจสอบชื่อเขตอีกครั้ง"
+          }
+        },
+        "required": ["message"]
+      },
+      "ValidationError": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "กรุณาระบุชื่อเขต หรือพิกัดตำแหน่ง"
+          }
+        },
+        "required": ["message"]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "ไม่สามารถเชื่อมต่อฐานข้อมูลจุดเสี่ยงได้ กรุณาลองใหม่"
+          }
+        },
+        "required": ["message"]
+      }
+    }
+  }
+}
